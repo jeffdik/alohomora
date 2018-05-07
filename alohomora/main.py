@@ -73,6 +73,8 @@ def format_role(role_arn, account_map):
     else:
         return role_arn
 
+def read_stdin_password():
+    return sys.stdin.readline().rstrip('\n')
 
 class Main(object):
     """Actually does stuff."""
@@ -127,6 +129,10 @@ class Main(object):
                             action='store_true',
                             help="Print the program version and exit",
                             default=False)
+        parser.add_argument("--passwd",
+                            help="Where to find the password",
+                            choices=['stdin', 'getpass'],
+                            default='getpass')
         self.options = parser.parse_args()
 
         # if debug is passed, set log level to DEBUG
@@ -169,6 +175,14 @@ class Main(object):
         if not username:
             alohomora.die("Oops, don't forget to provide a username")
 
+        #
+        # Get the password function
+        #
+        if('getpass' == self._get_config('passwd', 'getpass')):
+            password_fn = getpass.getpass
+        else:
+            password_fn = read_stdin_password
+
         idp_url = self._get_config('idp-url', None)
         if not idp_url:
             alohomora.die("Oops, don't forget to provide an idp-url")
@@ -179,8 +193,10 @@ class Main(object):
         #
         # Authenticate the user
         #
-        provider = alohomora.req.DuoRequestsProvider(idp_url, auth_method)
-        (okay, response) = provider.login_one_factor(username, getpass.getpass)
+        allow_interactive=('getpass' == self._get_config('passwd', 'getpass'))
+        provider = alohomora.req.DuoRequestsProvider(idp_url, auth_method,
+                                                     allow_interactive=allow_interactive)
+        (okay, response) = provider.login_one_factor(username, password_fn)
         assertion = None
 
         if not okay:
@@ -229,7 +245,8 @@ class Main(object):
                 selectedrole = alohomora._prompt_for_a_thing(
                     "Please choose the role you would like to assume:",
                     awsroles,
-                    lambda s: format_role(s.split(',')[0], account_map))
+                    lambda s: format_role(s.split(',')[0], account_map),
+                    allow_interactive=('getpass' == self._get_config('passwd', 'getpass')))
 
                 role_arn = selectedrole.split(',')[0]
                 principal_arn = selectedrole.split(',')[1]
