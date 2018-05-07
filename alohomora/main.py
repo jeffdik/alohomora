@@ -75,6 +75,8 @@ def format_role(role_arn, account_map):
     else:
         return role_arn
 
+def read_stdin_password():
+    return sys.stdin.readline().rstrip('\n')
 
 class Main(object):
     """Actually does stuff."""
@@ -133,6 +135,10 @@ class Main(object):
                             action='store_true',
                             help="Print the program version and exit",
                             default=False)
+        parser.add_argument("--passwd",
+                            help="Where to find the password",
+                            choices=['stdin', 'getpass'],
+                            default='getpass')
         self.options = parser.parse_args()
 
         # if debug is passed, set log level to DEBUG
@@ -190,8 +196,13 @@ class Main(object):
             provider = alohomora.req.BrowserProvider(idp_url)
             password_prompt = lambda: None
         else:
-            provider = alohomora.req.DuoRequestsProvider(idp_url, auth_method)
-            password_prompt = getpass.getpass
+            allow_interactive=('getpass' == self._get_config('passwd', 'getpass'))
+            provider = alohomora.req.DuoRequestsProvider(idp_url, auth_method,
+                                                         allow_interactive=allow_interactive)
+            if allow_interactive:
+                password_prompt = getpass.getpass
+            else:
+                password_prompt = read_stdin_password
         (okay, response) = provider.login_one_factor(username, password_prompt)
         assertion = None
 
@@ -241,7 +252,8 @@ class Main(object):
                 selectedrole = alohomora._prompt_for_a_thing(
                     "Please choose the role you would like to assume:",
                     awsroles,
-                    lambda s: format_role(s.split(',')[0], account_map))
+                    lambda s: format_role(s.split(',')[0], account_map),
+                    allow_interactive=('getpass' == self._get_config('passwd', 'getpass')))
 
                 role_arn = selectedrole.split(',')[0]
                 principal_arn = selectedrole.split(',')[1]
