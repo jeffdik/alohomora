@@ -49,7 +49,10 @@ def save(token, profile):
     filename = os.path.expanduser("~/.aws/credentials")
 
     # Read in the existing config file
-    config = ConfigParser.RawConfigParser()
+    config = ConfigParser.RawConfigParser(allow_no_value=True)
+    # prevent changing option names and comments to lowercase
+    # https://stackoverflow.com/a/19359720
+    config.optionxform = str
     config.read(filename)
 
     # This makes sure there is a [default] section if that's where
@@ -65,6 +68,7 @@ def save(token, profile):
     if not config.has_section(profile):
         config.add_section(profile)
 
+    config.set(profile, '# Expires '+token['Credentials']['Expiration'].isoformat())
     config.set(profile, 'aws_access_key_id', token['Credentials']['AccessKeyId'])
     config.set(profile, 'aws_secret_access_key', token['Credentials']['SecretAccessKey'])
     config.set(profile, 'aws_session_token', token['Credentials']['SessionToken'])
